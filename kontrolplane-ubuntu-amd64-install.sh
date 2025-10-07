@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+set -euo pipefail
 
 # ---------------- Defaults (override via flags) ----------------
 SERVICE_NAME="kontrolplane"
@@ -54,10 +54,7 @@ arch(){ uname -m; }
 
 ensure_cosign() {
   if have_cmd cosign; then return 0; fi
-  case "$(arch)" in
-    x86_64)  u="https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64" ;;
-    *) echo "Unsupported arch $(arch) for cosign"; return 1 ;;
-  esac
+  u="https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
   curl -fsSL "$u" -o /usr/local/bin/cosign
   chmod +x /usr/local/bin/cosign
 }
@@ -121,13 +118,8 @@ apt-get install -y docker.io curl wget ca-certificates coreutils
 ensure_cosign || true
 
 # ---------------- gVisor ----------------
-case "$(arch)" in
-  x86_64)
-    RUNSC_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/runsc"
-    SHIM_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/containerd-shim-runsc-v1" ;;
-  *) echo "Unsupported arch $(arch)"; exit 1 ;;
-esac
-
+RUNSC_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/runsc"
+SHIM_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/containerd-shim-runsc-v1" ;;
 curl -fsSL "$RUNSC_URL" -o /usr/local/bin/runsc
 curl -fsSL "$SHIM_URL" -o /usr/local/bin/containerd-shim-runsc-v1
 chmod +x /usr/local/bin/runsc /usr/local/bin/containerd-shim-runsc-v1
