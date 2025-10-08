@@ -207,4 +207,7 @@ EOF
   systemctl daemon-reload
   systemctl enable "${SERVICE_NAME}.service"
   systemctl restart "${SERVICE_NAME}.service" || systemctl start "${SERVICE_NAME}.service"
-  systemctl --
+  systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
+fi
+
+echo "DONE ✓  Binary: ${BIN_LOCAL}  Config: ${ETC_DIR}/config.toml (if provided)  Log: ${LOG_FILE}  Service: ${SERVICE_NAME} (user=${SERVICE_USER})"
