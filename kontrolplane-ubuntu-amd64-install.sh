@@ -14,7 +14,7 @@ CREATE_SERVICE=true                 # create the systemd service by default
 
 # Paths
 ETC_DIR="/etc/kontrolplane"
-LOG_DIR="/home/kontrolplane/log"
+LOG_DIR="/home/kontrol_plane/log"
 LOG_FILE="${LOG_DIR}/kontrolplane.log"
 BIN_LOCAL="${ETC_DIR}/kontrolplane-amd64"
 
