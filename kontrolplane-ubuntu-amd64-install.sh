@@ -82,12 +82,25 @@ fetch_s3_to() {
   }
 }
 
-ensure_service_user_and_dirs() {
+ensure_acl() {
+  if ! have_cmd setfacl; then
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -y >/dev/null 2>&1 || true
+    apt-get install -y acl >/dev/null 2>&1 || true
+  fi
+}
+
+ensure_user_exists() {
   local user="$1"
-  # Create service user if missing
   if ! id -u "$user" >/dev/null 2>&1; then
     useradd --system --create-home --home-dir "/home/$user" --shell /usr/sbin/nologin "$user"
   fi
+}
+
+ensure_service_user_and_dirs() {
+  local user="$1"
+  # Create service user if missing
+  ensure_user_exists "$user"
 
   # Add to docker group
   if getent group docker >/dev/null 2>&1; then
@@ -103,11 +116,7 @@ ensure_service_user_and_dirs() {
   chmod 0750 "$ETC_DIR" "$LOG_DIR"
   chmod 755 "$LOG_FILE"
 
-  # ACL default permissions
-  if ! have_cmd setfacl; then
-    apt-get update -y >/dev/null 2>&1 || true
-    apt-get install -y acl >/dev/null 2>&1 || true
-  fi
+  ensure_acl
   setfacl -d -m "u:${user}:rwX" "$LOG_DIR" || true
 }
 
@@ -119,7 +128,7 @@ ensure_cosign || true
 
 # ---------------- gVisor ----------------
 RUNSC_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/runsc"
-SHIM_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/containerd-shim-runsc-v1" ;;
+SHIM_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/containerd-shim-runsc-v1"
 curl -fsSL "$RUNSC_URL" -o /usr/local/bin/runsc
 curl -fsSL "$SHIM_URL" -o /usr/local/bin/containerd-shim-runsc-v1
 chmod +x /usr/local/bin/runsc /usr/local/bin/containerd-shim-runsc-v1
@@ -160,6 +169,14 @@ if [[ -n "${CFG_S3}" ]]; then
   rm -f "$TMP_CFG"
 fi
 
+# ---------------- Resources folder (owned by 'kontrolplane') ----------------
+ensure_user_exists "kontrolplane"
+mkdir -p "${ETC_DIR}/resources"
+chown -R "$user":"$user" "${ETC_DIR}/resources"
+chmod 0750 "${ETC_DIR}/resources"
+ensure_acl
+setfacl -d -m "u:kontrolplane:rwX" "${ETC_DIR}/resources" || true
+
 # ---------------- systemd service ----------------
 if $CREATE_SERVICE; then
   ensure_service_user_and_dirs "$SERVICE_USER"
@@ -188,7 +205,4 @@ EOF
   systemctl daemon-reload
   systemctl enable "${SERVICE_NAME}.service"
   systemctl restart "${SERVICE_NAME}.service" || systemctl start "${SERVICE_NAME}.service"
-  systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
-fi
-
-echo "DONE ✓  Binary: ${BIN_LOCAL}  Config: ${ETC_DIR}/config.toml (if provided)  Log: ${LOG_FILE}  Service: ${SERVICE_NAME} (user=${SERVICE_USER})"
+  systemctl --
