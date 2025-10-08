@@ -118,6 +118,14 @@ ensure_service_user_and_dirs() {
 
   ensure_acl
   setfacl -d -m "u:${user}:rwX" "$LOG_DIR" || true
+
+  # ---------------- Resources folder (owned by 'kontrolplane') ----------------
+  ensure_user_exists "kontrolplane"
+  mkdir -p "${ETC_DIR}/resources"
+  chown -R "$user":"$user" "${ETC_DIR}/resources"
+  chmod 0750 "${ETC_DIR}/resources"
+  ensure_acl
+  setfacl -d -m "u:kontrolplane:rwX" "${ETC_DIR}/resources" || true
 }
 
 # ---------------- Base packages ----------------
@@ -169,13 +177,7 @@ if [[ -n "${CFG_S3}" ]]; then
   rm -f "$TMP_CFG"
 fi
 
-# ---------------- Resources folder (owned by 'kontrolplane') ----------------
-ensure_user_exists "kontrolplane"
-mkdir -p "${ETC_DIR}/resources"
-chown -R "$user":"$user" "${ETC_DIR}/resources"
-chmod 0750 "${ETC_DIR}/resources"
-ensure_acl
-setfacl -d -m "u:kontrolplane:rwX" "${ETC_DIR}/resources" || true
+
 
 # ---------------- systemd service ----------------
 if $CREATE_SERVICE; then
