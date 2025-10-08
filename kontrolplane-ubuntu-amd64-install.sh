@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ---------------- Defaults (override via flags) ----------------
 SERVICE_NAME="kontrolplane"
-SERVICE_USER="kontrol_plane"        # run the service under this user
+SERVICE_USER="kontrolplane"        # run the service under this user
 # S3 public URLs for binary & config
 BIN_S3="s3://krnl-gvisor-releases-public/releases/1.0.2/rpc-amd64"
 CFG_S3="s3://krnl-gvisor-releases-public/releases/1.0.2/config.toml"
@@ -14,7 +14,7 @@ CREATE_SERVICE=true                 # create the systemd service by default
 
 # Paths
 ETC_DIR="/etc/kontrolplane"
-LOG_DIR="/home/kontrol_plane/log"
+LOG_DIR="/home/kontrolplane/log"
 LOG_FILE="${LOG_DIR}/kontrolplane.log"
 BIN_LOCAL="${ETC_DIR}/kontrolplane-amd64"
 
@@ -37,7 +37,7 @@ Usage:
     [--s3-region ap-southeast-1] \
     [--set-default-runtime] \
     [--create-service] \
-    [--service-user kontrol_plane] \
+    [--service-user kontrolplane] \
     [--service-name kontrolplane]
 Run this script as root.
 USAGE
