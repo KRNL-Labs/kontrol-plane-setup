@@ -54,8 +54,9 @@ arch(){ uname -m; }
 
 ensure_cosign() {
   if have_cmd cosign; then return 0; fi
-  u="https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
-  curl -fsSL "$u" -o /usr/local/bin/cosign
+  local u="https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
+  echo "[Install] cosign"
+  wget -qO /usr/local/bin/cosign "$u"
   chmod +x /usr/local/bin/cosign
 }
 
@@ -84,14 +85,16 @@ fetch_s3_to() {
 
 ensure_acl() {
   if ! have_cmd setfacl; then
-    yum install -y acl >/dev/null 2>&1 || true
+    dnf install -y -q acl >/dev/null 2>&1 || true
   fi
 }
 
 ensure_user_exists() {
   local user="$1"
+  local nologin_path
+  nologin_path="$(command -v nologin || echo /sbin/nologin)"
   if ! id -u "$user" >/dev/null 2>&1; then
-    useradd --system --create-home --home-dir "/home/$user" --shell /usr/sbin/nologin "$user"
+    useradd --system --create-home --home-dir "/home/$user" --shell "$nologin_path" "$user"
   fi
 }
 
@@ -100,19 +103,19 @@ ensure_service_user_and_dirs() {
   # Create service user if missing
   ensure_user_exists "$user"
 
-  # Add to docker group
+  # Add to docker group (Docker package creates it)
   if getent group docker >/dev/null 2>&1; then
     usermod -aG docker "$user"
   else
-    echo "WARNING: group 'docker' not present (Docker will create it)."
+    echo "WARNING: group 'docker' not present yet; will exist after Docker install."
   fi
 
   # Directories
   mkdir -p "$ETC_DIR" "$LOG_DIR"
   touch "$LOG_FILE"
-  chown -R "$user":"$user" "$ETC_DIR" "$LOG_DIR"
+  chown -R "$user":"$user" "$ETC_DIR" "$LOG_DIR" "$LOG_FILE"
   chmod 0750 "$ETC_DIR" "$LOG_DIR"
-  chmod 755 "$LOG_FILE"
+  chmod 0644 "$LOG_FILE"
 
   ensure_acl
   setfacl -d -m "u:${user}:rwX" "$LOG_DIR" || true
@@ -126,38 +129,38 @@ ensure_service_user_and_dirs() {
   setfacl -d -m "u:kontrolplane:rwX" "${ETC_DIR}/resources" || true
 }
 
-# ---------------- Base packages ----------------
-yum install -y curl wget ca-certificates coreutils
+# ---------------- Base packages (AL2023-safe: NO 'curl' to avoid conflict) ----------------
+echo "[Packages] base"
+dnf install -y -q wget ca-certificates coreutils >/dev/null
 
-# Install Docker from official repository
-yum install -y dnf-plugins-core
-yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-# Enable and start Docker
-systemctl enable docker
-systemctl start docker
+# ---------------- Docker (Amazon Linux 2023 repo) ----------------
+echo "[Packages] docker"
+sudo yum install -y docker
+sudo service docker start
+systemctl enable --now docker
+sudo usermod -a -G docker ec2-user
 
 ensure_cosign || true
 
 # ---------------- gVisor ----------------
+echo "[Install] gVisor runsc + containerd shim"
 RUNSC_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/runsc"
 SHIM_URL="https://storage.googleapis.com/gvisor/releases/release/latest/x86_64/containerd-shim-runsc-v1"
-curl -fsSL "$RUNSC_URL" -o /usr/local/bin/runsc
-curl -fsSL "$SHIM_URL" -o /usr/local/bin/containerd-shim-runsc-v1
+wget -qO /usr/local/bin/runsc "$RUNSC_URL"
+wget -qO /usr/local/bin/containerd-shim-runsc-v1 "$SHIM_URL"
 chmod +x /usr/local/bin/runsc /usr/local/bin/containerd-shim-runsc-v1
 
 # ---------------- Docker runtime ----------------
 mkdir -p /etc/docker
 if $SET_DEFAULT_RUNTIME; then
-  tee /etc/docker/daemon.json >/dev/null <<'EOF'
+  cat >/etc/docker/daemon.json <<'EOF'
 {
   "default-runtime": "runsc",
   "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } }
 }
 EOF
 else
-  tee /etc/docker/daemon.json >/dev/null <<'EOF'
+  cat >/etc/docker/daemon.json <<'EOF'
 {
   "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } }
 }
@@ -183,15 +186,13 @@ if [[ -n "${CFG_S3}" ]]; then
   rm -f "$TMP_CFG"
 fi
 
-
-
 # ---------------- systemd service ----------------
 if $CREATE_SERVICE; then
   ensure_service_user_and_dirs "$SERVICE_USER"
 
   START_CMD="${BIN_LOCAL} -log=debug >> ${LOG_FILE} 2>&1"
 
-  tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
+  cat >"/etc/systemd/system/${SERVICE_NAME}.service" <<EOF
 [Unit]
 Description=${SERVICE_NAME} service
 After=network-online.target docker.service
