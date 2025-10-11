@@ -5,8 +5,8 @@ set -euo pipefail
 SERVICE_NAME="kontrolplane"
 SERVICE_USER="kontrolplane"        # run the service under this user
 # S3 public URLs for binary & config
-BIN_S3="s3://krnl-gvisor-releases-public/releases/1.0.2/rpc-amd64"
-CFG_S3="s3://krnl-gvisor-releases-public/releases/1.0.2/config.toml"
+BIN_S3="s3://krnl-gvisor-releases-public/releases/latest/rpc-amd64"
+CFG_S3="s3://krnl-gvisor-releases-public/releases/latest/config.toml"
 S3_REGION=""
 
 SET_DEFAULT_RUNTIME=false
