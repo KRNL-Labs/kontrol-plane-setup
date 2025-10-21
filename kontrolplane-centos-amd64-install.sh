@@ -140,6 +140,15 @@ sudo service docker start
 systemctl enable --now docker
 sudo usermod -a -G docker ec2-user
 
+# ---------------- Docker Compose ----------------
+if ! have_cmd docker-compose; then
+  echo "[Packages] docker-compose"
+  if ! dnf install -y -q docker-compose >/dev/null 2>&1; then
+    wget -qO /usr/local/bin/docker-compose "https://github.com/docker/compose/releases/latest/download/docker-compose-Linux-$(uname -m)"
+    chmod +x /usr/local/bin/docker-compose
+  fi
+fi
+
 ensure_cosign || true
 
 # ---------------- gVisor ----------------
@@ -156,13 +165,27 @@ if $SET_DEFAULT_RUNTIME; then
   cat >/etc/docker/daemon.json <<'EOF'
 {
   "default-runtime": "runsc",
-  "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } }
+  "runtimes": {
+    "runsc": {
+      "path": "/usr/local/bin/runsc",
+      "runtimeArgs": [
+        "--metric-server=0.0.0.0:1337"
+      ]
+    }
+  }
 }
 EOF
 else
   cat >/etc/docker/daemon.json <<'EOF'
 {
-  "runtimes": { "runsc": { "path": "/usr/local/bin/runsc" } }
+  "runtimes": {
+    "runsc": {
+      "path": "/usr/local/bin/runsc",
+      "runtimeArgs": [
+        "--metric-server=0.0.0.0:1337"
+      ]
+    }
+  }
 }
 EOF
 fi
@@ -217,4 +240,24 @@ EOF
   systemctl --no-pager --full status "${SERVICE_NAME}.service" || true
 fi
 
+# ---------------- runsc metric server service ----------------
+cat >/etc/systemd/system/runsc-metric-server.service <<'EOF'
+[Unit]
+Description=gVisor runsc metric server (Docker runtime)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/runsc --root=/var/run/docker/runtime-runc/moby --metric-server=0.0.0.0:1337 metric-server
+Restart=always
+RestartSec=2
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable --now runsc-metric-server
 echo "DONE ✓  Binary: ${BIN_LOCAL}  Config: ${ETC_DIR}/config.toml (if provided)  Log: ${LOG_FILE}  Service: ${SERVICE_NAME} (user=${SERVICE_USER})"
