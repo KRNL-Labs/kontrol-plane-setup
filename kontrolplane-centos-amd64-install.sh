@@ -131,7 +131,7 @@ ensure_service_user_and_dirs() {
 
 # ---------------- Base packages (AL2023-safe: NO 'curl' to avoid conflict) ----------------
 echo "[Packages] base"
-dnf install -y -q wget ca-certificates coreutils >/dev/null
+dnf install -y -q wget ca-certificates coreutils make git >/dev/null
 
 # ---------------- Docker (Amazon Linux 2023 repo) ----------------
 echo "[Packages] docker"
@@ -148,6 +148,36 @@ if ! have_cmd docker-compose; then
     chmod +x /usr/local/bin/docker-compose
   fi
 fi
+
+# ---------------- Docker Buildx ----------------
+BUILDX_VER="${BUILDX_VER:-v0.17.1}"
+INSTALL_BUILDX=false
+if BUILDX_OUTPUT="$(docker buildx version 2>/dev/null)"; then
+  CURRENT_BUILDX_VER="$(printf '%s\n' "${BUILDX_OUTPUT}" | awk 'NR==1 {print $2}')"
+  if [[ "${CURRENT_BUILDX_VER}" != "${BUILDX_VER}" ]]; then
+    INSTALL_BUILDX=true
+    echo "[Install] docker-buildx ${BUILDX_VER} (replace ${CURRENT_BUILDX_VER:-unknown})"
+  fi
+else
+  INSTALL_BUILDX=true
+  echo "[Install] docker-buildx ${BUILDX_VER}"
+fi
+if $INSTALL_BUILDX; then
+  BUILDX_ARCH="$(uname -m)"
+  case "$BUILDX_ARCH" in
+    x86_64) BUILDX_ARCH="amd64" ;;
+    aarch64) BUILDX_ARCH="arm64" ;;
+  esac
+  mkdir -p ~/.docker/cli-plugins
+  BUILDX_URL="https://github.com/docker/buildx/releases/download/${BUILDX_VER}/buildx-${BUILDX_VER}.linux-${BUILDX_ARCH}"
+  if have_cmd curl; then
+    curl -fsSL "$BUILDX_URL" -o ~/.docker/cli-plugins/docker-buildx
+  else
+    wget -qO ~/.docker/cli-plugins/docker-buildx "$BUILDX_URL"
+  fi
+  chmod +x ~/.docker/cli-plugins/docker-buildx
+fi
+docker buildx version || true
 
 ensure_cosign || true
 
